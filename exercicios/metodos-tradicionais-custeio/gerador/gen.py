@@ -1,9 +1,28 @@
-import sys
 from decimal import Decimal
 from calc import r2, dre_pct, marginal, absorcao, pe
 
-OUT = sys.argv[1]
 GAB = []  # (exercicio, item, resposta)
+ANS = {}  # respostas estruturadas para o Moodle (cloze)
+
+
+class N:
+    """resposta numérica: kind 'r' = R$ (tol 0,01), 'p' = % (1 casa, tol 0,05)"""
+    def __init__(self, v, kind="r"):
+        self.v, self.kind = float(v), kind
+
+
+class MC:
+    def __init__(self, correct, options):
+        assert correct in options
+        self.correct, self.options = correct, options
+
+
+def dre_ans(R, cvp, cvv, cf):
+    p = lambda v: N(v / R * 100, "p")
+    mc = R - cvp - cvv
+    return [["Receita", N(R), p(R)], ["Custo variável de produção (CVP)", N(cvp), p(cvp)], ["Custo variável de vendas (CVV)", N(cvv), p(cvv)],
+            ["Custo variável total", N(cvp + cvv), p(cvp + cvv)], ["Margem de contribuição", N(mc), p(mc)],
+            ["Custos fixos", N(cf), p(cf)], ["Lucro operacional", N(mc - cf), p(mc - cf)]]
 
 
 # ---------------- formatação ----------------
@@ -193,6 +212,12 @@ def ex1():
         ("1", "Margem de segurança", pc(ms)),
         ("1", "Queijo minas: custo / preço (marginal)", f"{brl(m['custo'])} / {brl(m['preco'])}"),
     ])
+    ANS[1] = [("tab", "a) Classifique cada gasto", ["Gasto", "Classe"], [[n, MC(c, ["CVP", "CF", "CVV"])] for n, _, c in lista]),
+              ("tab", "b) DRE analítico", ["Conta", "R$", "%"], dre_ans(R, cvp, cvv, cf)),
+              ("tab", "c) Pontos de equilíbrio", ["Ponto de equilíbrio", "R$"],
+               [["Financeiro", N(P['pef'])], ["Contábil", N(P['pec'])], ["Econômico", N(P['pee'])]]),
+              ("tab", "d) Margem de segurança", ["Indicador", "%"], [["Margem de segurança", N(ms, "p")]]),
+              ("tab", "e) Queijo minas frescal (custeio marginal)", ["Item", "Custo", "Preço"], [["Queijo minas frescal", N(m['custo']), N(m['preco'])]])]
     return dict(n=1, ind="Laticínios", empresa="Laticínios Serra Verde", tit="Classificação, DRE e pontos de equilíbrio",
                 tags=["CVP · CVV · CF", "DRE analítico", "PE financeiro, contábil e econômico", "Margem de segurança"],
                 enun=enun, sol="".join(s))
@@ -232,9 +257,10 @@ def ex2():
     s.append("<h4>b) Custo e preço pelo custeio marginal</h4>")
     m0 = marginal(1, d, 0)
     s.append(eq("Markup divisor de custo", fr(f"100 − ({pn(d['cvv'])} + {pn(d['cvp'])} + {pn(d['cf'])})", "100"), res=num(m0['div_c'], 2)))
-    rows = []
+    rows, ans_it = [], []
     for n, mp, L in itens:
         m = marginal(mp, d, L)
+        ans_it.append([n, N(m['custo']), N(m['preco'])])
         s.append(f'<div class="prod">{n} <span>MP = {num(mp)} · L = {L}%</span></div>')
         s.append(eq("CUSTO", fr(num(mp), num(m['div_c'])), res=brl(m['custo'])))
         s.append(eq("PREÇO", fr(num(mp), fr(f"100 − ({pn(d['cvv'])} + {pn(d['cvp'])} + {pn(d['cf'])} + {L})", "100")),
@@ -256,6 +282,12 @@ def ex2():
     aceitar a margem menor, reduzir a matéria-prima (renegociar o latão, revisar o projeto) ou baixar CVV e CF. Isso é o raciocínio de
     <i>custo-meta</i>: o mercado fixa o preço e a empresa ajusta o custo."""))
     GAB.append(("2", "Margem obtida na fechadura a R$ 120,00", pc(Lobt)))
+    ANS[2] = [("tab", "a) Percentuais para a fórmula", ["Percentual", "%"],
+               [["CVP (sem matéria-prima)", N(d['cvp'], "p")], ["CVV", N(d['cvv'], "p")], ["CF", N(d['cf'], "p")], ["Lucro operacional", N(d['lo'], "p")]]),
+              ("tab", "b) Custeio marginal", ["Item", "Custo", "Preço"], ans_it),
+              ("tab", "c) Preço do concorrente", ["Indicador", "%"], [["Margem de lucro obtida na fechadura a R$ 120,00", N(Lobt, "p")]]),
+              ("tab", "d) Com L = 50%", ["Pergunta", "Resposta"],
+               [["O divisor da fórmula do preço fica", MC("igual a zero, então o preço não pode ser calculado", ["igual a 0,50, então o preço dobra", "igual a zero, então o preço não pode ser calculado", "negativo, então o preço fica negativo"])]])]
 
     s.append("<h4>d) Por que não é possível aplicar L = 50%?</h4>")
     s.append(f"""<p>Com L = 50%, o divisor fica (100 − ({pn(d['cvv'])} + {pn(d['cvp'])} + {pn(d['cf'])} + 50)) ÷ 100 = 0. Não existe divisão por zero:
@@ -300,9 +332,10 @@ def ex3():
     s.append(eq("CF unit.<sub>ideal</sub>", fr("CF total", "Σ itens vendidos"), fr(num(CF), f"{sv:,}".replace(",", ".")), res=brl(cfd)))
 
     s.append("<h4>c) Custo e preço de venda</h4>")
-    rows, difs = [], []
+    rows, difs, ans_i, ans_d = [], [], [], []
     for n, mp, pr, v, L in P:
         a, b = absorcao(mp, cfi, d, L), absorcao(mp, cfd, d, L)
+        ans_i.append([n, N(a['custo']), N(a['preco'])]); ans_d.append([n, N(b['custo']), N(b['preco'])])
         s.append(f'<div class="prod">{n} <span>MP = {num(mp)} · L = {L}%</span></div>')
         s.append('<div class="two">')
         s.append('<div><span class="mth int">Absorção integral</span>')
@@ -326,6 +359,13 @@ def ex3():
              "para serem reconhecidos quando esses móveis forem vendidos na feira.</p>")
     GAB.append(("3", "CF unitário integral / ideal", f"{brl(cfi)} / {brl(cfd)}"))
     GAB.append(("3", "CF que fica no estoque (integral)", brl(est)))
+    ANS[3] = [("tab", "a) Percentuais", ["Percentual", "%"], [["CVP (sem matéria-prima)", N(d['cvp'], "p")], ["CVV", N(d['cvv'], "p")], ["Lucro operacional", N(d['lo'], "p")]]),
+              ("tab", "b) Custo fixo unitário", ["Método", "CF unitário"], [["Absorção integral", N(cfi)], ["Absorção ideal", N(cfd)]]),
+              ("tab", "c) Absorção integral", ["Produto", "Custo", "Preço"], ans_i),
+              ("tab", "c) Absorção ideal", ["Produto", "Custo", "Preço"], ans_d),
+              ("tab", "d) Custo fixo no estoque", ["Item", "R$"], [["CF que fica no estoque pelo método integral", N(est)]]),
+              ("tab", "e) Formação de preço", ["Pergunta", "Resposta"],
+               [["Método mais prudente para formar preço num mês de formação de estoque", MC("Absorção ideal", ["Absorção integral", "Absorção ideal"])]])]
 
     s.append("<h4>e) Qual método usar para formar o preço?</h4>")
     s.append(interp(f"""O <b>integral</b> divide o CF pelas {sp:,} unidades produzidas e chega a preços menores, porque parte do custo fixo foi para o estoque.
@@ -387,10 +427,11 @@ def ex4():
     s.append(f'<div class="mrow"><span class="mth int">Absorção integral</span> CF unit. = {num(cf)} ÷ {sp:,} = <b>{num(cfi)}</b>; '.replace(f"{sp:,}", f"{sp:,}".replace(",", ".")) +
              f"divisor de custo = (100 − ({pn(d['cvv'])} + {pn(d['cvp'])}))/100 = {num(absorcao(1, 0, d, 0)['div_c'])}</div>")
     s.append(f'<div class="mrow"><span class="mth ide">Absorção ideal</span> CF unit. = {num(cf)} ÷ {sv:,} = <b>{num(cfd)}</b>; mesmo divisor da integral</div>'.replace(f"{sv:,}", f"{sv:,}".replace(",", ".")))
-    rows, mais, menos, spread = [], [], [], []
+    rows, mais, menos, spread, a_m, a_i, a_d = [], [], [], [], [], [], []
     for n, mp, pr, v, L in P:
         m, a, b = marginal(mp, d, L), absorcao(mp, cfi, d, L), absorcao(mp, cfd, d, L)
         ps = [m['preco'], a['preco'], b['preco']]
+        a_m.append([n, N(m['custo']), N(m['preco'])]); a_i.append([n, N(a['custo']), N(a['preco'])]); a_d.append([n, N(b['custo']), N(b['preco'])])
         if m['preco'] == max(ps): mais.append(n.lower())
         if m['preco'] == min(ps): menos.append(n.lower())
         spread.append((n, (float(max(ps)) / float(min(ps)) - 1) * 100))
@@ -425,6 +466,12 @@ def ex4():
     <br><br>Nenhum dos critérios é "o certo"; todos são aproximações. Entre o menor e o maior preço calculado, a diferença chega a {pc(big[1], 1)} na {big[0].lower()}.
     Num mercado competitivo de moda, um preço distorcido pelo critério de rateio significa perder volume ou deixar margem na mesa."""))
     GAB.append(("4", "MP em que custo marginal = custo integral", brl(mp_star)))
+    ANS[4] = [("tab", "a) DRE", ["Receita / custos", "R$", "%"], dre_ans(R, cvp, cvv, cf)),
+              ("tab", "b) Custeio marginal", ["Produto", "Custo", "Preço"], a_m),
+              ("tab", "b) Custeio por absorção integral", ["Produto", "Custo", "Preço"], a_i),
+              ("tab", "b) Custeio por absorção ideal", ["Produto", "Custo", "Preço"], a_d),
+              ("tab", "c) Comparação", ["Pergunta", "Resposta"],
+               [["Produto em que o custeio marginal dá o MENOR preço dos três métodos", MC(menos[0].capitalize() if False else [p[0] for p in P if p[0].lower() == menos[0]][0], [p[0] for p in P])]])]
     return dict(n=4, ind="Têxtil / confecção", empresa="Confecções Vale do Itajaí", tit="Os três métodos lado a lado",
                 tags=["DRE", "Marginal", "Absorção integral", "Absorção ideal"], enun="".join(h), sol="".join(s))
 
@@ -467,7 +514,8 @@ def ex5():
     s.append(interp(f"""A receita de julho ({brl(R)}) supera os três pontos. A folga sobre o PE econômico é de {pc((R - float(PE['pee'])) / R * 100)}:
     uma queda de vendas maior que isso já faz a empresa remunerar o capital abaixo do esperado."""))
     GAB.append(("5", "PE financeiro / contábil / econômico", f"{brl(PE['pef'])} / {brl(PE['pec'])} / {brl(PE['pee'])}"))
-
+    a5_pe = [["Financeiro", N(PE['pef'])], ["Contábil", N(PE['pec'])], ["Econômico", N(PE['pee'])]]
+    a5_p, a5_q = [], []
     s.append("<h4>b) Preço pelos três métodos</h4>")
     s.append(f"""<p>CVP = {pn(d['cvp_tot'])}% − {pn(d['mp'])}% = <b>{pn(d['cvp'])}%</b> · CVV = <b>{pn(d['cvv'])}%</b> · CF = <b>{pn(d['cf'])}%</b> · L = <b>{L}%</b><br>
     Divisor marginal = (100 − ({pn(d['cvv'])} + {pn(d['cvp'])} + {pn(d['cf'])} + {L}))/100 = <b>{num(marginal(1, d, L)['div_p'])}</b> ·
@@ -483,6 +531,7 @@ def ex5():
         folga = (pm / float(b['preco']) - 1) * 100
         rows.append([n, brl(m['preco']), brl(a['preco']), brl(b['preco']), brl(pm), f'<span class="ok">+{pc(folga, 1)}</span>'])
         GAB.append(("5", f"{n}: preço marginal / integral / ideal", f"{brl(m['preco'])} / {brl(a['preco'])} / {brl(b['preco'])}"))
+        a5_p.append([n, N(m['preco']), N(a['preco']), N(b['preco'])])
     s.append("<h4>c) Comparação com o mercado</h4>")
     s.append(table(["Produto", "Marginal", "Integral", "Ideal", "Mercado", "Mercado vs. ideal"], rows, "data res"))
     s.append(interp("""Mesmo pelo método mais exigente (ideal), os três produtos têm preço calculado abaixo do mercado. A Polimix é competitiva e tem
@@ -500,7 +549,17 @@ def ex5():
             bad.append(n)
         rows.append([n, brl(b2['preco']), brl(pm), '<span class="ok">abaixo do mercado</span>' if ok else '<span class="bad">acima do mercado</span>'])
         GAB.append(("5", f"{n}: preço ideal após a queda", brl(b2['preco'])))
+        a5_q.append([n, N(b2['preco']), MC("abaixo do mercado" if ok else "acima do mercado", ["abaixo do mercado", "acima do mercado"])])
     assert bad == ["Balde 20 L", "Caixa organizadora 30 L"]
+    ANS[5] = [("tab", "a) Pontos de equilíbrio", ["Ponto de equilíbrio", "R$"], a5_pe),
+              ("tab", "b) Preço de venda", ["Produto", "Marginal", "Absorção integral", "Absorção ideal"], a5_p),
+              ("tab", "c) Competitividade", ["Pergunta", "Resposta"],
+               [["Pelo método ideal, os preços calculados ficam", MC("abaixo do mercado nos três produtos", ["abaixo do mercado nos três produtos", "acima do mercado nos três produtos", "acima do mercado só na bombona"])]]),
+              ("tab", "d) Queda nas vendas: novo CF unitário (ideal)", ["Item", "R$"], [["CF unitário ideal", N(cfd2)]]),
+              ("tab", "d) Queda nas vendas: novo preço (ideal)", ["Produto", "Preço", "Situação"], a5_q),
+              ("tab", "e) Decisão", ["Pergunta", "Resposta"],
+               [["Decisão recomendada no curto prazo", MC("manter o preço de mercado enquanto houver margem de contribuição e buscar volume",
+                 ["repassar o novo custo ao preço", "manter o preço de mercado enquanto houver margem de contribuição e buscar volume", "suspender a produção do balde e da caixa"])]])]
     s.append(table(["Produto", "Preço ideal (nova venda)", "Mercado", "Situação"], rows, "data res", align="lrrl"))
 
     s.append("<h4>e) Decisão</h4>")
@@ -514,76 +573,8 @@ def ex5():
                 tags=["Pontos de equilíbrio", "Três métodos", "Preço de mercado", "Queda de volume"], enun="".join(h), sol="".join(s))
 
 
-EX = [ex1(), ex2(), ex3(), ex4(), ex5()]
 
-# ---------------- página ----------------
-CSS = open(__file__.replace("gen.py", "page.css")).read()
-parts = []
-parts.append("""<title>Custeio na Prática</title>
-<meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:ital,wght@0,400;0,500;0,600;0,700;1,400&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
-<style>""" + CSS + "</style>")
-parts.append("""<header class="top"><div class="wrap">
-<p class="eyebrow">Gestão de Custos · UTFPR · Métodos tradicionais de custeio</p>
-<h1>Custeio na Prática</h1>
-<p class="lede">Cinco exercícios resolvidos passo a passo, em cinco indústrias diferentes: classificação de custos, DRE analítico,
-pontos de equilíbrio, custeio marginal, absorção integral e absorção ideal.</p>
-<nav class="toc">""" + "".join(f'<a href="#ex{e["n"]}"><b>{e["n"]}</b><span>{e["ind"]}</span><i>{e["tit"]}</i></a>' for e in EX) +
-             '<a href="#gabarito" class="gab"><b>G</b><span>Gabarito</span><i>Respostas resumidas</i></a></nav></div></header>')
+def build():
+    return [ex1(), ex2(), ex3(), ex4(), ex5()]
 
-parts.append("""<main class="wrap">
-<section class="formulas" id="formulas">
-<h2>Fórmulas utilizadas</h2>
-<div class="fgrid">
-<div class="fcard"><span class="mth mar">Custeio marginal (absorção plena)</span>
-<div class="eq"><span class="lhs">CUSTO</span> = """ + fr("MP", fr("100 − (CVV + CVP + CF)", "100")) + """</div>
-<div class="eq"><span class="lhs">PREÇO</span> = """ + fr("MP", fr("100 − (CVV + CVP + CF + L)", "100")) + """</div>
-<p>CF entra como % da receita.</p></div>
-<div class="fcard"><span class="mth int">Absorção integral</span>
-<div class="eq"><span class="lhs">CF unit.</span> = """ + fr("CF total", "Σ itens produzidos") + """</div>
-<div class="eq"><span class="lhs">CUSTO</span> = """ + fr("MP + CF unit.", fr("100 − (CVV + CVP)", "100")) + """</div>
-<div class="eq"><span class="lhs">PREÇO</span> = """ + fr("MP + CF unit.", fr("100 − (CVV + CVP + L)", "100")) + """</div></div>
-<div class="fcard"><span class="mth ide">Absorção ideal</span>
-<div class="eq"><span class="lhs">CF unit.</span> = """ + fr("CF total", "Σ itens vendidos") + """</div>
-<p>Custo e preço com as mesmas fórmulas da absorção integral.</p></div>
-<div class="fcard"><span class="mth pe">Pontos de equilíbrio</span>
-<div class="eq"><span class="lhs">PE<sub>c</sub></span> = """ + fr("CF", "MC%") + """</div>
-<div class="eq"><span class="lhs">PE<sub>f</sub></span> = """ + fr("CF − Depreciação", "MC%") + """</div>
-<div class="eq"><span class="lhs">PE<sub>e</sub></span> = """ + fr("CF + Ativo × taxa", "MC%") + """</div></div>
-</div>
-<div class="premissas"><h3>Premissas adotadas</h3><ul>
-<li><b>CVP na fórmula = CVP total % − MP %.</b> A matéria-prima entra em R$ pela ficha técnica, como no exemplo do roupeiro (CVP 50% − MP 40% = 10%).</li>
-<li>CVV, CVP, CF e L são percentuais sobre a receita do DRE. MC% = 100% − CVP total% − CVV%.</li>
-<li>O CF unitário é calculado pela simples contagem de itens (produzidos ou vendidos), como nos slides, e arredondado a 2 casas antes de entrar na fórmula.</li>
-<li>Resultados arredondados a 2 casas (0,005 para cima). Os slides truncam: 70,00 ÷ 0,52 = 134,615… aparece como 134,61 nos slides e 134,62 aqui. A diferença nunca passa de R$&nbsp;0,01.</li>
-<li>As fórmulas de ponto de equilíbrio não estão nos slides de custeio. Usamos o critério usual da disciplina: o financeiro retira a depreciação e o econômico soma o custo de oportunidade do capital.</li>
-<li>Salários de mensalistas, inclusive os da fábrica, são tratados como custo fixo, como no DRE analítico dos slides.</li>
-</ul></div>
-<button type="button" id="tg" class="tg" aria-pressed="false">Ocultar resoluções (modo aula)</button>
-</section>""")
 
-for e in EX:
-    parts.append(f"""<section class="ex" id="ex{e['n']}">
-<div class="exhead"><span class="exn">Exercício {e['n']}</span><span class="ind">{e['ind']} · {e['empresa']}</span>
-<h2>{e['tit']}</h2><div class="tags">{''.join(f'<span>{t}</span>' for t in e['tags'])}</div></div>
-<div class="enun"><h3>Enunciado</h3>{e['enun']}</div>
-<details class="sol" open><summary>Resolução passo a passo</summary><div class="solb">{e['sol']}</div></details>
-</section>""")
-
-rows = "".join(f'<tr><td class="c">{a}</td><td class="l">{b}</td><td class="r">{c}</td></tr>' for a, b, c in GAB)
-parts.append(f"""<section class="ex" id="gabarito"><div class="exhead"><span class="exn">Gabarito</span><h2>Respostas resumidas</h2></div>
-<div class="tw"><table class="data gabt"><thead><tr><th>Ex.</th><th>Item</th><th>Resposta</th></tr></thead><tbody>{rows}</tbody></table></div>
-<p class="muted">Valores arredondados a 2 casas. Diferenças de R$&nbsp;0,01 em relação a quem trunca os resultados (como nos slides) são esperadas.</p></section>
-</main>
-<footer class="wrap foot">Prof. José Ângelo Ferreira · Gestão de Custos · UTFPR. Empresas e números fictícios, criados para fins didáticos.</footer>
-<script>
-(function(){{var b=document.getElementById('tg');b.addEventListener('click',function(){{var on=b.getAttribute('aria-pressed')!=='true';
-document.querySelectorAll('details.sol').forEach(function(d){{d.open=!on;}});b.setAttribute('aria-pressed',on);
-b.textContent=on?'Mostrar resoluções':'Ocultar resoluções (modo aula)';}});}})();
-</script>""")
-
-open(OUT, "w").write("\n".join(parts))
-print("ok", len(GAB), "respostas")
-for g in GAB:
-    print(" | ".join(g).replace("&nbsp;", " "))
