@@ -7,3 +7,4 @@
 - `confere_modelo_karina.py`: confere o exemplo da Indústria de Bolsas Karina com as mesmas fórmulas.
 
 Tolerâncias em `TOL` (`moodle.py`); custos e preços aceitam no mínimo 0,05% do valor, para absorver o arredondamento da MC total % em valores grandes.
+- `docx_enunciados.js`: Word com os enunciados → exporte os dados para JSON e rode `node docx_enunciados.js dados.json ../enunciados-tres-metodos.docx`.
