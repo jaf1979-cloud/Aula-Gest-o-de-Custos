@@ -8,3 +8,4 @@
 
 Tolerâncias do Moodle no dicionário `TOL` de `moodle.py` (R$ totais 0,01; MC% 0,02; CF unit 0,05; custo e PV 0,10).
 Ao mudar `dados.py`, o gerador confere sozinho se quantidade × preço soma a receita e se a MP das fichas soma a MP do DRE.
+- `planilha.py`: preenche o modelo do professor (`planilha_modelo.xlsx`), uma aba por exercício, com fórmulas → `python3 planilha.py ../Planilha_MC_resolvida.xlsx` (depois abra no Excel para recalcular).
